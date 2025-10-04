@@ -1,0 +1,155 @@
+<!doctype html>
+<html lang="hi">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Giveaway Entry</title>
+<style>
+  body{font-family:system-ui,Segoe UI,Roboto,Arial; background:#f4f7fb; padding:20px; color:#14213d;}
+  .card{max-width:720px;margin:20px auto;background:#fff;padding:18px;border-radius:10px;box-shadow:0 8px 30px rgba(20,33,61,0.08);}
+  label{display:block;margin:10px 0 6px;font-weight:600;}
+  input[type=text], input[type=email], input[type=tel], select, textarea {width:100%;padding:10px;border:1px solid #d6dbe6;border-radius:8px;}
+  .row{display:flex;gap:10px;}
+  .col{flex:1;}
+  .small{font-size:13px;color:#556077;}
+  .prizes{display:flex;gap:12px;flex-wrap:wrap;margin-top:8px;}
+  .prize{border:1px solid #e1e7f2;padding:8px 10px;border-radius:8px;cursor:pointer;}
+  .prize input{margin-right:6px;}
+  .actions{display:flex;justify-content:space-between;align-items:center;margin-top:16px;}
+  button{background:#0b84ff;color:#fff;padding:10px 14px;border-radius:8px;border:0;font-weight:700;cursor:pointer;}
+  button.secondary{background:#eef3ff;color:#0b84ff;border:1px solid #d6e4ff;}
+  .hint{font-size:13px;color:#6b7280;}
+  .hidden{display:none;}
+  #previewImg{max-width:200px;margin-top:8px;border-radius:6px;}
+</style>
+</head>
+<body>
+
+<div class="card">
+  <h2>Free Fire Giveaway — Entry Form</h2>
+  <p class="small">कृपया ध्यान दें: कभी भी अपना Facebook/Gmail password न दें। हम केवल UID और contact info माँगते हैं।</p>
+
+  <form id="entryForm" enctype="multipart/form-data">
+    <label>Free Fire UID <span class="small">(required)</span></label>
+    <input type="text" id="uid" name="uid" placeholder="e.g. 123456789" required pattern="\d+">
+
+    <label>In-Game Name (IGN)</label>
+    <input type="text" id="ign" name="ign" placeholder="Your In-Game Name" required>
+
+    <div class="row">
+      <div class="col">
+        <label>Email (Gmail preferred)</label>
+        <input type="email" id="email" name="email" placeholder="you@gmail.com" required>
+      </div>
+      <div class="col">
+        <label>Phone (optional)</label>
+        <input type="tel" id="phone" name="phone" placeholder="+91XXXXXXXXXX">
+      </div>
+    </div>
+
+    <label>Social profile (Facebook profile URL) <span class="small">(optional)</span></label>
+    <input type="text" id="social" name="social" placeholder="https://www.facebook.com/yourprofile">
+
+    <label>Choose prize you want to claim</label>
+    <div class="prizes" id="prizeList">
+      <label class="prize"><input type="checkbox" name="prize" value="Diamond Pack 100">Diamond Pack 100</label>
+      <label class="prize"><input type="checkbox" name="prize" value="Exclusive Emote">Exclusive Emote</label>
+      <label class="prize"><input type="checkbox" name="prize" value="Gun Skin A">Gun Skin A</label>
+      <label class="prize"><input type="checkbox" name="prize" value="Bundle X">Bundle X</label>
+    </div>
+
+    <label>Upload in-game screenshot (UID visible) <span class="small">(recommended)</span></label>
+    <input type="file" id="screenshot" name="screenshot" accept="image/*">
+    <img id="previewImg" class="hidden" alt="preview">
+
+    <label><input type="checkbox" id="agree" required> मैं नियम और शर्तें और प्राइवेसी पॉलिसी पढ़ता/समझता हूँ।</label>
+
+    <!-- reCAPTCHA placeholder -->
+    <div style="margin-top:8px;" class="small">[CAPTCHA यहाँ जोड़ें — production में reCAPTCHA लगाना न भूलें]</div>
+
+    <div class="actions">
+      <button type="submit" id="submitBtn">Entry Submit & Verify</button>
+      <button type="button" class="secondary" id="clearBtn">Clear</button>
+    </div>
+
+    <p id="status" class="small"></p>
+  </form>
+</div>
+
+<!-- OTP modal simple UI -->
+<div id="otpModal" class="hidden card" style="max-width:420px;">
+  <h3>Verify Email / Phone</h3>
+  <p class="small">हमने आपके Email/Phone पर OTP भेजा है — OTP दर्ज करें:</p>
+  <input type="text" id="otpInput" placeholder="Enter OTP">
+  <div style="margin-top:12px;">
+    <button id="verifyOtpBtn">Verify OTP</button>
+  </div>
+  <p id="otpStatus" class="small"></p>
+</div>
+
+<script>
+// client-side validations & UX
+const form=document.getElementById('entryForm');
+const screenshot=document.getElementById('screenshot');
+const previewImg=document.getElementById('previewImg');
+const status=document.getElementById('status');
+
+screenshot.addEventListener('change', e=>{
+  const f=e.target.files[0];
+  if(!f) { previewImg.classList.add('hidden'); return; }
+  const url=URL.createObjectURL(f);
+  previewImg.src=url; previewImg.classList.remove('hidden');
+});
+
+document.getElementById('clearBtn').addEventListener('click', ()=>{
+  form.reset(); previewImg.classList.add('hidden'); status.textContent='';
+});
+
+// On submit: do simple checks, then send to /submit (you must implement backend)
+form.addEventListener('submit', async (ev)=>{
+  ev.preventDefault();
+  status.textContent='Submitting...';
+  const data=new FormData(form);
+
+  // basic duplicate prevention: require at least one prize selected
+  if(!data.getAll('prize').length){ status.textContent='कृपया कम से कम एक prize चुनें।'; return; }
+
+  // send to backend
+  try{
+    const resp=await fetch('/submit', { method:'POST', body:data });
+    if(resp.ok){
+      const json=await resp.json();
+      // backend should initiate OTP (email/sms) and return success
+      status.textContent='Entry received. Check your email/phone for OTP.';
+      // show OTP modal (simple)
+      showOtpModal();
+    } else {
+      const err=await resp.text();
+      status.textContent='Submission failed: '+err;
+    }
+  }catch(err){
+    status.textContent='Network error: '+err.message;
+  }
+});
+
+// OTP modal functions (UI only — backend needed)
+const otpModal=document.getElementById('otpModal');
+const otpInput=document.getElementById('otpInput');
+const verifyOtpBtn=document.getElementById('verifyOtpBtn');
+const otpStatus=document.getElementById('otpStatus');
+
+function showOtpModal(){ otpModal.classList.remove('hidden'); otpModal.style.margin='20px auto'; }
+verifyOtpBtn.addEventListener('click', async ()=>{
+  const otp=otpInput.value.trim();
+  if(!otp){ otpStatus.textContent='OTP डालें'; return; }
+  // call backend to verify OTP
+  try{
+    const r=await fetch('/verify-otp', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({otp})});
+    const j=await r.json();
+    if(r.ok){ otpStatus.textContent='Verified! Your entry is valid.'; }
+    else { otpStatus.textContent='OTP invalid or expired.'; }
+  }catch(e){ otpStatus.textContent='Network error.'; }
+});
+</script>
+</body>
+</html>
